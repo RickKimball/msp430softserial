@@ -1,0 +1,43 @@
+/**
+ * Launchpad compatible full-duplex software UART example program.
+ * 
+ * This example program implements an async serial echo program.
+ * To test it, use a terminal program such as putty or
+ * hyperterminal, connect to the COM port associated with your
+ * launchpad device, and type away. Whatever you type will be
+ * echoed back to you. The default settings are 9600-8-N-1
+ * as defined in the config.h file.
+ * 
+ * The code illustrates how to utilize the full-duplex interrupt
+ * driven software UART routines from softserial.c
+ *  
+ * CPU speed and baud rate are set in config.h. The software
+ * might drive the TX and RX signals up to 230400 baud
+ * depending on the accuracy of your SMCLK. To get a baud rate
+ * greater than 9600 you will have to use something like
+ * an FT232RL device and a fast CPU speed. Using the integrated
+ * COM port of the launchpad, the baud rate is limited to 9600
+ * as stated in the launchpad user guide.
+ * 
+ * This software monopolizes the TIMERA0_VECTOR and TIMERA1_VECTOR
+ * interrupts. This code assumes you are using a TI Launchpad
+ * with an msp430g2231 in the socket, and the external watch
+ * crystal soldered on the board. However it should work with
+ * any mps430 device you can put in the launchpad socket. It
+ * uses about 800bytes of flash.
+ * 
+ * This software is s mismash of various chunks of code 
+ * available on the net, with my own special seasoning. Mostly
+ * inspired by Appnote sla307a, the arduino HardwareSerial.cpp
+ * source, and various postings on the TI e2e forum.
+ * 
+ * License: Do with this code what you want. However, don't blame
+ * me if you connect it to a heart pump and it stops.  This source
+ * is provided as is with no warranties. It probably has bugs!!
+ * You have been warned!
+ * 
+ * Author: Rick Kimball
+ * email: rick@kimballsoftware.com
+ * Version: 1.0 Initial version 04-20-2011
+ * 
+ */
