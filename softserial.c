@@ -1,12 +1,9 @@
 /**
  * softserial.c - full-duplex software UART routines using TimerA interrupts
  *
- * Note: This code monopolizes the TIMER_A interrupts. If you are using a
- * small chips such as the msp430g2231 and your code needs to do timer
- * related things you are going to have to accomplish that without using
- * TIMER_A. Maybe the Watchdog timer or take turns with the CCR0 interrupt. On
- * larger chips such as the msp430g2553 that have multiple TimerA peripherals,
- * just use a different TimerA and leave TIMER0_A for softserial.
+ * Note: This code monopolizes the TIMER_A interrupts. If your code
+ * wants to do timer related things, you are going to have to use
+ * the Watchdog timer or take turns with the CCR0 interrupt.
  *
  * License: Do with this code what you want. However, don't blame
  * me if you connect it to a heart pump and it stops.  This source
@@ -15,9 +12,8 @@
  *
  * Author: Rick Kimball
  * email: rick@kimballsoftware.com
- * Version: 1.00 04-20-2011 Initial version 
- * Version: 1.01 04-21-2011 cleanup
- * Version: 1.02 04-21-2011 modified ISR defines to make msp430g2553 happy
+ * Version: 1.00 Initial version 04-20-2011
+ * Version: 1.01 cleanup 04-21-2011
  *
  */
 
@@ -192,11 +188,7 @@ void SoftSerial_xmit(uint8_t byte) {
  * start bit + 8 data bits + stop bit.
  *
  */
-#ifdef TIMER0_A0_VECTOR
-#pragma vector = TIMER0_A0_VECTOR
-#else
 #pragma vector = TIMERA0_VECTOR
-#endif
 __interrupt void SoftSerial_TX_ISR(void) {
     static uint8_t txBitCnt = 10;       // 1 Start bit + 8 data bits + 1 stop bit
 
@@ -233,20 +225,12 @@ __interrupt void SoftSerial_TX_ISR(void) {
  *
  */
 
-#ifdef TIMER0_A1_VECTOR
-#pragma vector = TIMER0_A1_VECTOR       // this mcu has multiple TIMERA peripherals
-#else
 #pragma vector = TIMERA1_VECTOR
-#endif
 __interrupt void SoftSerial_RX_ISR(void) {
     static unsigned char rxBitCnt = 8;
     static unsigned char rxData = 0;
 
-#ifdef TIMER0_A1_VECTOR
-    if ( TA0IV == TA0IV_TACCR1 ) {     // this mcu has multiple TIMERA peripherals
-#else
     if ( TAIV == TAIV_TACCR1 ) {
-#endif
         _SoftSerial_ToggleRxDebugPin();      // watch RXDEBUG_PIN with a scope to see sample timing
         TACCR1 += TICKS_PER_BIT;             // Setup next time to sample
         if (TACCTL1 & CAP) {                 // Is this the start bit?
