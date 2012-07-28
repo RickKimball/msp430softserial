@@ -120,21 +120,16 @@ unsigned char SoftSerial_empty(void) {
  * SoftSerial_read() - remove an RXD character from the ring buffer
  */
 int SoftSerial_read(void) {
-    int c=-1;
+    register uint16_t temp_tail=rx_buffer.tail;
 
-    __disable_interrupt();  // disable interrupts to protect head and tail values
-                            // This prevents the RX_ISR from modifying them
-                            // while we are trying to read and modify
-
-    // if the head isn't ahead of the tail, we don't have any characters
-    if (rx_buffer.head != rx_buffer.tail) {
-        c = (uint8_t)rx_buffer.buffer[rx_buffer.tail];
-        rx_buffer.tail = (unsigned int)(rx_buffer.tail + 1) % RX_BUFFER_SIZE;
+    if (rx_buffer.head != temp_tail) {
+        uint8_t c = rx_buffer.buffer[temp_tail++];
+        rx_buffer.tail = temp_tail % RX_BUFFER_SIZE;
+        return c;
     }
-
-    __enable_interrupt();  // ok .. let everyone at them
-
-    return c;
+    else {
+        return -1;
+    }
 }
 
 /**
