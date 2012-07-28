@@ -87,23 +87,46 @@ volatile unsigned int USARTTXBUF; // Software UART TX data
  * SoftSerial_init() - configure pins and timers.
  *
  */
-void SoftSerial_init(void) {
+
+void SoftSerial_init(void)
+{
 
     P1OUT |= TX_PIN | RX_PIN;           // Initialize all GPIO
-    P1SEL |= TX_PIN | RX_PIN;           // Enabled Timer ISR function for TXD/RXD pins
+    P1SEL |= TX_PIN | RX_PIN;           // Enable Timer alternate functionality
     P1DIR |= TX_PIN;                    // Enable TX_PIN for output
 
     TACCTL0 = OUT;                      // Set TXD Idle state as Mark = '1', +3.3 volts normal
     TACCTL1 = SCS | CM1 | CAP | CCIE;   // Sync TACLK and MCLK, Detect Neg Edge, Enable Capture mode and RX Interrupt
-
     TACTL = TASSEL_2 | MC_2 | TACLR;    // Clock TIMERA from SMCLK, run in continuous mode counting from to 0-0xFFFF
+}
+
+/**
+ * SoftSerial_end() - stop timers and revert pins back to GPIO inputs.
+ *
+ */
+
+void SoftSerial_end(void)
+{
+    while (TACCTL0 & CCIE) {
+        ; // wait for previous xmit to finish
+    }
+
+    __delay_cycles(TICKS_PER_BIT);  // Our TX_ISR cuts it close on sending data out. We really don't wait
+                                    // for stop bit but make up for it on the next xmit(). So here we have
+                                    // to really wait one delay to keep the TX pin high like a stop bit does.
+
+    P1SEL &= ~(TX_PIN | RX_PIN);    // remove alternate pin functionality revert back to a GPIO
+    P1DIR &= ~TX_PIN;               // set the TX_PIN back to an input
+
+    TACTL=TACCTL0=TACCTL1= 0;       // reset timers and capture control registers
 }
 
 /**
  * SoftSerial_available() - returns the number of characters in the ring buffer
  */
 
-unsigned SoftSerial_available(void) {
+unsigned SoftSerial_available(void)
+{
     return (rx_buffer.head - rx_buffer.tail) % RX_BUFFER_SIZE;
 }
 
@@ -111,14 +134,17 @@ unsigned SoftSerial_available(void) {
  * SoftSerial_empty() - returns true if rx_buffer is empty
  */
 
-unsigned SoftSerial_empty(void) {
+unsigned SoftSerial_empty(void)
+{
     return rx_buffer.head == rx_buffer.tail;
 }
 
 /**
  * SoftSerial_read() - remove an RX character from the ring buffer
  */
-int SoftSerial_read(void) {
+
+int SoftSerial_read(void)
+{
     register uint16_t temp_tail=rx_buffer.tail;
 
     if (rx_buffer.head != temp_tail) {
@@ -135,7 +161,9 @@ int SoftSerial_read(void) {
  * SoftSerial_read_nc() - no check remove an RX character from the ring buffer
  *        after you have asked for available() and are controlling the loop
  */
-uint8_t SoftSerial_read_nc(void) {
+
+uint8_t SoftSerial_read_nc(void)
+{
     register uint16_t temp_tail=rx_buffer.tail;
 
     uint8_t c = rx_buffer.buffer[temp_tail++];
@@ -143,13 +171,11 @@ uint8_t SoftSerial_read_nc(void) {
     return c;
 }
 
-
 /**
  * SoftSerial_xmit() - send one byte of data
  *
  * Wait for any transmissions in progress to complete
  * then queue up the USARTTXBUF byte with new data.
- *
  */
 
 void SoftSerial_xmit(uint8_t c)
@@ -212,7 +238,6 @@ void SoftSerial_xmit(uint8_t c)
  *
  * Handle the sending of a data byte with one
  * start bit + 8 data bits + stop bit.
- *
  */
 
 #ifndef __GNUC__
@@ -249,11 +274,8 @@ void SoftSerial_TX_ISR(void)
  * capture mode waiting for the next start bit.
  *
  * Note: serial data is LSB first
- *
  */
 
-
-//Timer A1 interrupt service routine
 #ifndef __GNUC__
 #pragma vector = TIMERA1_VECTOR
 __interrupt
@@ -286,4 +308,3 @@ void SoftSerial_RX_ISR(void)
         }
     }
 }
-

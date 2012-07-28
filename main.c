@@ -51,19 +51,22 @@
 #include "softserial.h"
 
 #define SHOW_DCO_SETTINGS
+
 #ifdef SHOW_DCO_SETTINGS
 /**
  * putchar() - providing this function allows use of printf() on larger chips
  */
-int putchar(int c) {
+int putchar(int c)
+{
     SoftSerial_xmit(c);
     return 0;
 }
 
 /**
- * print() - like puts but without a newline
+ * print() - like puts() but without a newline
  */
-void print(const char *s) {
+void print(const char *s)
+{
     do {
         putchar(*s++);
     } while(*s);
@@ -78,8 +81,9 @@ void Set_DCO(unsigned int Delta); // use external 32.768k clock to calibrate and
  * setup() - initialize timers and clocks
  */
 
-void setup() {
-    WDTCTL = WDTPW + WDTHOLD;       // Stop watchdog timer
+void setup()
+{
+    WDTCTL = WDTPW + WDTHOLD;       // Stop watchdog timer, can comment out if -mdisable-watchdog
 
     /**
      * Setting these flags allows you to easily measure the actual SMCLK and ACLK
@@ -91,7 +95,7 @@ void setup() {
     P1DIR |= BIT4; P1SEL |= BIT4;   // measure P1.4 for actual SMCLK
 
     BCSCTL3 = (BCSCTL3 & ~XCAP_3) | XCAP_1; // this is a better setting for my XTAL. It might not be for you
-    __delay_cycles(0xffff);         // let XTAL stablize
+    __delay_cycles(0xffff);         // let XTAL stabilize
 
 #if defined(CALIBRATE_DCO)
     Set_DCO(F_CPU/4096);            // Calibrate and set DCO clock to F_CPU define
@@ -107,8 +111,8 @@ void setup() {
     #endif
 #endif
 
-    SoftSerial_init();              // Configure TIMERA
-    __enable_interrupt();           // let the timers do their work
+    SoftSerial_init();              // Configure TIMERA and RX/TX pins
+    __enable_interrupt();           // let the TIMERA do its work
 
 #ifdef SHOW_DCO_SETTINGS
     static const unsigned char hextbl[] = "0123456789ABCDEF";
@@ -145,7 +149,15 @@ void loop()
     unsigned cnt = SoftSerial_available();
     if ( cnt > 0 ) {
         do {
-            SoftSerial_xmit(SoftSerial_read_nc());
+            uint8_t c = SoftSerial_read_nc();
+            if ( c != 0x04 ) {
+                SoftSerial_xmit(c);
+            }
+            else {  // user pressed CTRL-D, force reset test end() function
+                print("\r\nshutting down...");
+                SoftSerial_end();   // make sure last character is sent
+                WDTCTL = ~WDTPW;    // cause a reset by setting invalid WD password
+            }
         } while( --cnt);
     }
 #endif
@@ -158,7 +170,6 @@ void loop()
 
 void main(void)
 {
-
     setup();
 
     while( 1 ) {
@@ -173,32 +184,33 @@ void Set_DCO(unsigned int Delta)            // Set DCO to F_CPU
 {
     unsigned int Compare, Oldcapture = 0;
 
-    BCSCTL1 |= DIVA_3;                        // ACLK = LFXT1CLK/8
-    TACCTL0 = CM_1 | CCIS_1 | CAP;            // CAP, ACLK
-    TACTL = TASSEL_2 | MC_2 | TACLR;          // SMCLK, cont-mode, clear
+    BCSCTL1 |= DIVA_3;                      // ACLK = LFXT1CLK/8
+    TACCTL0 = CM_1 | CCIS_1 | CAP;          // CAP, ACLK
+    TACTL = TASSEL_2 | MC_2 | TACLR;        // SMCLK, continuous mode, clear
 
     while (1) {
-        while (!(CCIFG & TACCTL0))
-            ;             // Wait until capture occured
-        TACCTL0 &= ~CCIFG;                      // Capture occured, clear flag
-        Compare = TACCR0;                       // Get current captured SMCLK
-        Compare = Compare - Oldcapture;         // SMCLK difference
-        Oldcapture = TACCR0;                    // Save current captured SMCLK
+        while (!(CCIFG & TACCTL0));         // Wait until capture occurred
+        TACCTL0 &= ~CCIFG;                  // Capture occurred, clear flag
+        Compare = TACCR0;                   // Get current captured SMCLK
+        Compare = Compare - Oldcapture;     // SMCLK difference
+        Oldcapture = TACCR0;                // Save current captured SMCLK
 
-        if (Delta == Compare) break;                                // If equal, leave "while(1)"
+        if (Delta == Compare) break;        // If equal, leave "while(1)"
         else if (Delta < Compare) {
-            DCOCTL--;                             // DCO is too fast, slow it down
-            if (DCOCTL == 0xFF)                   // Did DCO roll under?
-            if (BCSCTL1 & 0x0f) BCSCTL1--;                        // Select lower RSEL
+            DCOCTL--;                       // DCO is too fast, slow it down
+            if (DCOCTL == 0xFF)             // Did DCO roll under?
+            if (BCSCTL1 & 0x0f)
+                BCSCTL1--;                  // Select lower RSEL
         }
         else {
-            DCOCTL++;                             // DCO is too slow, speed it up
-            if (DCOCTL == 0x00)                   // Did DCO roll over?
-            if ((BCSCTL1 & 0x0f) != 0x0f) BCSCTL1++;                        // Sel higher RSEL
+            DCOCTL++;                       // DCO is too slow, speed it up
+            if (DCOCTL == 0x00)             // Did DCO roll over?
+            if ((BCSCTL1 & 0x0f) != 0x0f)
+                BCSCTL1++;                  // Select higher RSEL
         }
     }
-    TACCTL0 = 0;                              // Stop TACCR0
-    TACTL = 0;                                // Stop Timer_A
-    BCSCTL1 &= ~DIVA_3;                       // ACLK = LFXT1CLK
+    TACCTL0 = 0;                            // Stop TACCR0
+    TACTL = 0;                              // Stop Timer_A
+    BCSCTL1 &= ~DIVA_3;                     // ACLK = LFXT1CLK
 }
 #endif

@@ -19,17 +19,18 @@
 #define SOFTSERIAL_H_
 
 void SoftSerial_init(void);
+void SoftSerial_end(void);
+
 unsigned SoftSerial_available(void);
 unsigned SoftSerial_empty(void);
 void SoftSerial_xmit(unsigned char);
 int SoftSerial_read(void);
 unsigned char SoftSerial_read_nc(void);
 
-
 //------------------------------------------------------------
 // TX/RX PINS - you can't really change these as we use the
-//  latch feature of CCR1. On a different chip you might be
-//  able to do something
+// latch feature of CCR1. On a different chip you might be
+// able to do something
 //------------------------------------------------------------
 #define TX_PIN BIT1     // TX Data on P1.1 (Timer0_A.OUT0)
 #define RX_PIN BIT2     // RX Data on P1.2 (Timer0_A.CCI1A)
