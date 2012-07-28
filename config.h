@@ -16,9 +16,11 @@
  *
  * Author: Rick Kimball
  * email: rick@kimballsoftware.com
- * Version: 1.00 Initial version 04-20-2011
- * Version: 1.01 cleanup 04-21-2011
  *
+ * Version: 1.00 04-20-2011 Initial version
+ * Version: 1.01 04-21-2011 cleanup
+ * Version: 1.02 04-21-2011 modified ISR defines to make msp430g2553 happy
+ * Version: 1.03 07-27-2012 added support of msp430-gcc 4.5.3 and above
  */
 
 #ifndef CONFIG_H_
@@ -34,7 +36,7 @@
  *         a specific baud rate, use a larger F_CPU value until it
  *         works.  You can test how well it works by use a copy paste
  *         command in your terminal emulator.  That seems to stress
- *         the full duplex aspects of the code.
+ *         the full-duplex aspects of the code.
  *
  *   More info about UART friendly F_CPU and BAUD_RATE combos can be found here:
  *
@@ -44,33 +46,24 @@
 
 //-------------------------------------------------------------------------
 // CALIBRATE_DCO enable this flag to use the soldered 32.768k watch crystal
-//               as a reference clock and calc the F_CPU frequency without
+//               as a reference clock and calibrate the F_CPU frequency without
 //               saving the results to flash. Only calibrated at POC
 //               however temperature will affect the values and clock
-//               An improvement to the code would be to occasionally recalc
+//               An improvement to the code would be to run occasionally
 //-------------------------------------------------------------------------
 #define CALIBRATE_DCO       // on by default
 
-//#define F_CPU 18432000    // UART friendly but out of spec, might work
 #define F_CPU 16000000      // fastest clock
-//#define F_CPU 14746000    // UART friendly faster clock
 //#define F_CPU 12000000    // a popular faster clock
 //#define F_CPU 11059200    // UART friendly faster clock
 //#define F_CPU  8000000    // a popular medium clock
 //#define F_CPU  7372800    // UART and less power friendly rate
-//#define F_CPU  3686400    // UART and less power friendly rate
 //#define F_CPU  1843200    // UART and power friendly
+//#define F_CPU  1000000    // slow factory calibrated on all chips
 
-#if !defined(CALIBRATE_DCO)
-#undef F_CPU
-#define F_CPU  16000000     // use calibrated 16MHZ clock
-#endif
 
-#define BAUD_RATE 9600      // launchpad max speed is 9600. However an FT232RL can go faster
                             // http://www.sparkfun.com/products/718 - FT232RL Breakout Board
+#define BAUD_RATE 9600      // launchpad max speed is 9600. However an FT232RL can go faster
 #define RX_BUFFER_SIZE 16   // Set the size of the ring buffer data needs to be a power of 2
-
-typedef unsigned char uint8_t;
-typedef char int8_t;
 
 #endif
