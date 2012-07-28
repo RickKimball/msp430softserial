@@ -19,9 +19,12 @@
 #define SOFTSERIAL_H_
 
 void SoftSerial_init(void);
-unsigned char SoftSerial_empty(void);
+unsigned SoftSerial_available(void);
+unsigned SoftSerial_empty(void);
 void SoftSerial_xmit(unsigned char);
 int SoftSerial_read(void);
+unsigned char SoftSerial_read_nc(void);
+
 
 //------------------------------------------------------------
 // TX/RX PINS - you can't really change these as we use the

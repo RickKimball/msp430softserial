@@ -133,13 +133,22 @@ void setup() {
 
 void loop()
 {
-    int c;
 
+#if 0 // use read that checks available
+    int c;
     if ( !SoftSerial_empty() ) {
         while((c=SoftSerial_read()) != -1) {
             SoftSerial_xmit((uint8_t)c);
         }
     }
+#else // use no_check read, only safe when you know available() count
+    unsigned cnt = SoftSerial_available();
+    if ( cnt > 0 ) {
+        do {
+            SoftSerial_xmit(SoftSerial_read_nc());
+        } while( --cnt);
+    }
+#endif
 }
 
 /**

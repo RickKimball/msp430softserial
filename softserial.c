@@ -68,8 +68,8 @@ typedef union uint8x2_t {
  */
 typedef struct {
     uint8_t buffer[RX_BUFFER_SIZE];
-    volatile int head;
-    volatile int tail;
+    volatile unsigned head;
+    volatile unsigned tail;
 } ringbuffer_t;
 
 //--------------------------------------------------------------------------------
@@ -103,21 +103,20 @@ void SoftSerial_init(void) {
  * SoftSerial_available() - returns the number of characters in the ring buffer
  */
 
-uint8_t SoftSerial_available(void) {
-    unsigned cnt = (rx_buffer.head - rx_buffer.tail) % RX_BUFFER_SIZE;
-    return cnt;
+unsigned SoftSerial_available(void) {
+    return (rx_buffer.head - rx_buffer.tail) % RX_BUFFER_SIZE;
 }
 
 /**
  * SoftSerial_empty() - returns true if rx_buffer is empty
  */
 
-unsigned char SoftSerial_empty(void) {
+unsigned SoftSerial_empty(void) {
     return rx_buffer.head == rx_buffer.tail;
 }
 
 /**
- * SoftSerial_read() - remove an RXD character from the ring buffer
+ * SoftSerial_read() - remove an RX character from the ring buffer
  */
 int SoftSerial_read(void) {
     register uint16_t temp_tail=rx_buffer.tail;
@@ -131,6 +130,19 @@ int SoftSerial_read(void) {
         return -1;
     }
 }
+
+/**
+ * SoftSerial_read_nc() - no check remove an RX character from the ring buffer
+ *        after you have asked for available() and are controlling the loop
+ */
+uint8_t SoftSerial_read_nc(void) {
+    register uint16_t temp_tail=rx_buffer.tail;
+
+    uint8_t c = rx_buffer.buffer[temp_tail++];
+    rx_buffer.tail = temp_tail % RX_BUFFER_SIZE;
+    return c;
+}
+
 
 /**
  * SoftSerial_xmit() - send one byte of data
