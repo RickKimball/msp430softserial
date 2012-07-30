@@ -35,7 +35,7 @@
  *
  */
 
-#define TICKS_PER_BIT      (F_CPU/BAUD_RATE )                       // timer clock ticks per bit
+#define TICKS_PER_BIT      (F_CPU/BAUD_RATE )       // timer clock ticks per bit
 #define TICKS_PER_BIT_DIV2 (F_CPU/(BAUD_RATE*2))    // timer clock ticks per half a bit
 
 #ifndef TIMERA0_VECTOR

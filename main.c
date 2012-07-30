@@ -24,9 +24,12 @@
  * with an msp430g2231 in the socket, and the external watch
  * crystal soldered on the board. However it should work with
  * any mps430 device you can put in the launchpad socket. It
- * uses about 800 bytes of flash.
+ * uses about 700 bytes of flash.  You can also run without
+ * calibration and set the DCO using factory calibrated values.
+ * A thrid option is to calibrate with a XTAL then use the
+ * values it computes as constants.
  *
- * This software is a mismash of various chunks of code
+ * This software is a mishmash of various chunks of code
  * available on the net, with my own special seasoning. Mostly
  * inspired by Appnote sla307a, the Arduino HardwareSerial.cpp
  * source, and various postings on the TI e2e forum.
@@ -143,6 +146,9 @@ void setup()
 
 void loop()
 {
+
+// a couple of different methods of reading & writing below
+
 #if 0 // use SoftSerial_read() it checks available() before continuing
     int c;
     if ( !SoftSerial_empty() ) {
