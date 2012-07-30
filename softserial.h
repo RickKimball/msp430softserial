@@ -39,7 +39,7 @@ unsigned char SoftSerial_read_nc(void);
 #define TX_PIN BIT1     // TX Data on P1.1 (Timer0_A.OUT0)
 #define RX_PIN BIT2     // RX Data on P1.2 (Timer0_A.CCI1A)
 
-#ifdef __cpluscplus
+#ifdef __cplusplus
 } /* extern "C" */
 #endif
 #endif /*SOFTSERIAL_H_*/
