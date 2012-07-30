@@ -26,9 +26,9 @@
  * any mps430 device you can put in the launchpad socket. It
  * uses about 800 bytes of flash.
  *
- * This software is s mismash of various chunks of code
+ * This software is a mismash of various chunks of code
  * available on the net, with my own special seasoning. Mostly
- * inspired by Appnote sla307a, the arduino HardwareSerial.cpp
+ * inspired by Appnote sla307a, the Arduino HardwareSerial.cpp
  * source, and various postings on the TI e2e forum.
  *
  * License: Do with this code what you want. However, don't blame
@@ -50,16 +50,26 @@
 #include "config.h"
 #include "softserial.h"
 
-#define SHOW_DCO_SETTINGS
+#define SHOW_DCO_SETTINGS // spew the DCO settings at startup
 
-#ifdef SHOW_DCO_SETTINGS
 /**
  * putchar() - providing this function allows use of printf() on larger chips
  */
-int putchar(int c)
+int putchar(register int c)
 {
     SoftSerial_xmit(c);
     return 0;
+}
+
+/**
+ * print_hexb() - print uint8_t as hex
+ */
+void print_hexb(register unsigned char c)
+{
+    static const unsigned char hextbl[]="0123456789ABCDEF";
+
+    SoftSerial_xmit(hextbl[c >> 4]);
+    SoftSerial_xmit(hextbl[c & 0x0F]);
 }
 
 /**
@@ -68,10 +78,9 @@ int putchar(int c)
 void print(const char *s)
 {
     do {
-        putchar(*s++);
-    } while(*s);
+        SoftSerial_xmit(*s++);
+    } while (*s);
 }
-#endif
 
 #if defined(CALIBRATE_DCO)
 void Set_DCO(unsigned int Delta); // use external 32.768k clock to calibrate and set F_CPU speed
@@ -94,7 +103,10 @@ void setup()
     P1DIR |= BIT0; P1SEL |= BIT0;   // measure P1.0 for actual ACLK
     P1DIR |= BIT4; P1SEL |= BIT4;   // measure P1.4 for actual SMCLK
 
-    BCSCTL3 = (BCSCTL3 & ~XCAP_3) | XCAP_1; // this is a better setting for my XTAL. It might not be for you
+    // my XTAL is closer to 32.768 with this setting.
+    // It might not be work as well for you.
+    BCSCTL3 = (BCSCTL3 & ~XCAP_3) | XCAP_0;
+
     __delay_cycles(0xffff);         // let XTAL stabilize
 
 #if defined(CALIBRATE_DCO)
@@ -115,50 +127,46 @@ void setup()
     __enable_interrupt();           // let the TIMERA do its work
 
 #ifdef SHOW_DCO_SETTINGS
-    static const unsigned char hextbl[] = "0123456789ABCDEF";
     print("\r\n>>Calibrated DCO values are:\r\n");
-    print("BCSCTL1= 0x");
-    putchar(hextbl[BCSCTL1>>4]);putchar(hextbl[BCSCTL1&0x0F]);
-    print("\r\n");
-    print("DCOCTL = 0x");
-    putchar(hextbl[DCOCTL>>4]);putchar(hextbl[DCOCTL&0x0F]);
-    print("\r\n");
+    print("BCSCTL1= 0x"); print_hexb(BCSCTL1); print("\r\n");
+    print("DCOCTL = 0x"); print_hexb(DCOCTL);  print("\r\n");
 #endif
-
 }
 
 /**
  * loop() - this routine runs over and over
  *
- * Wait for data to arrive. When something is available,
+ * Wait for data to arrive. When a character is available,
  * read it from the ring_buffer and echo it back to the
  * sender.
  */
 
 void loop()
 {
-
-#if 0 // use read that checks available
+#if 0 // use SoftSerial_read() it checks available() before continuing
     int c;
     if ( !SoftSerial_empty() ) {
         while((c=SoftSerial_read()) != -1) {
             SoftSerial_xmit((uint8_t)c);
         }
     }
-#else // use no_check read, only safe when you know available() count
-    unsigned cnt = SoftSerial_available();
-    if ( cnt > 0 ) {
-        do {
-            uint8_t c = SoftSerial_read_nc();
-            if ( c != 0x04 ) {
-                SoftSerial_xmit(c);
-            }
-            else {  // user pressed CTRL-D, force reset test end() function
-                print("\r\nshutting down...");
-                SoftSerial_end();   // make sure last character is sent
-                WDTCTL = ~WDTPW;    // cause a reset by setting invalid WD password
-            }
-        } while( --cnt);
+#else // use SoftSerial_read_nc(), "no check read" it doesn't check
+      // available(). Only safe after calling available() to get count
+    while( 1 ) {
+        unsigned cnt = SoftSerial_available();
+        if ( cnt ) {
+            do {
+                uint8_t c = SoftSerial_read_nc();
+                if ( c == 0x04 ) {  // check if user pressed CTRL-D, test end()
+                    print("\r\nshutting down...");
+                    SoftSerial_end();   // make sure last character is sent
+                    WDTCTL = ~WDTPW;    // force a reset by setting invalid watchdog password
+                }
+                else {
+                    SoftSerial_xmit(c);
+                }
+            } while( --cnt);
+        }
     }
 #endif
 }

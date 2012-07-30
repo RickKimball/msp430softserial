@@ -35,16 +35,19 @@
  *
  */
 
-#define TICKS_PER_BIT ( F_CPU / BAUD_RATE )                    // timer clock ticks per bit
-#define TICKS_PER_BIT_DIV2 (( F_CPU / (BAUD_RATE*2) ) )        // timer clock ticks per half bit
+#define TICKS_PER_BIT      (F_CPU/BAUD_RATE )                       // timer clock ticks per bit
+#define TICKS_PER_BIT_DIV2 (F_CPU/(BAUD_RATE*2))    // timer clock ticks per half a bit
 
 #ifndef TIMERA0_VECTOR
 #define TIMERA0_VECTOR TIMER0_A0_VECTOR
-#endif /* TIMERA0_VECTOR */
+#endif /* TIMERA0_VECTOR - TX ISR */
 
 #ifndef TIMERA1_VECTOR
 #define TIMERA1_VECTOR TIMER0_A1_VECTOR
-#endif /* TIMERA1_VECTOR */
+#endif /* TIMERA1_VECTOR - RX ISR */
+
+#define STOPBITS_1 0x0100 /* used in xmit routine*/
+#define STOPBITS_2 0x0300
 
 /**
  * uint8x2_t - optimized structure storage for ISR. Fits our static variables in one register
@@ -62,7 +65,6 @@ typedef union uint8x2_t {
     } b;
 } uint8x2_t;
 
-
 /**
  * typedef ringbuffer_t - ring buffer structure
  */
@@ -76,21 +78,20 @@ typedef struct {
 // F I L E   G L O B A L S
 //--------------------------------------------------------------------------------
 
-ringbuffer_t rx_buffer;
 volatile unsigned int USARTTXBUF; // Software UART TX data
+ringbuffer_t rx_buffer;
 
 //--------------------------------------------------------------------------------
 // E X P O S E D   E X T E R N A L   F U N C T I O N S
 //--------------------------------------------------------------------------------
 
 /**
- * SoftSerial_init() - configure pins and timers.
+ * SoftSerial_init() - configure pins and timer.
  *
  */
 
 void SoftSerial_init(void)
 {
-
     P1OUT |= TX_PIN | RX_PIN;           // Initialize all GPIO
     P1SEL |= TX_PIN | RX_PIN;           // Enable Timer alternate functionality
     P1DIR |= TX_PIN;                    // Enable TX_PIN for output
@@ -98,10 +99,16 @@ void SoftSerial_init(void)
     TACCTL0 = OUT;                      // Set TXD Idle state as Mark = '1', +3.3 volts normal
     TACCTL1 = SCS | CM1 | CAP | CCIE;   // Sync TACLK and MCLK, Detect Neg Edge, Enable Capture mode and RX Interrupt
     TACTL = TASSEL_2 | MC_2 | TACLR;    // Clock TIMERA from SMCLK, run in continuous mode counting from to 0-0xFFFF
+
+#if TICKS_PER_BIT < 208 /* 4800 @ 1MHz seems to work, RX_ISR routine requires at least 208 cycles */
+    #error BAUD_RATE is too fast for F_CPU! Try lowering the BAUD_RATE or increasing the F_CPU.
+#endif
+
+    //P1DIR |= BIT6;                    // uncomment to see how long the RX_ISR is taking
 }
 
 /**
- * SoftSerial_end() - stop timers and revert pins back to GPIO inputs.
+ * SoftSerial_end() - stop timer and revert pins back to GPIO inputs.
  *
  */
 
@@ -118,7 +125,7 @@ void SoftSerial_end(void)
     P1SEL &= ~(TX_PIN | RX_PIN);    // remove alternate pin functionality revert back to a GPIO
     P1DIR &= ~TX_PIN;               // set the TX_PIN back to an input
 
-    TACTL=TACCTL0=TACCTL1= 0;       // reset timers and capture control registers
+    TACTL=TACCTL0=TACCTL1= 0;       // stop TIMERA and reset Capture Control Registers
 }
 
 /**
@@ -180,38 +187,22 @@ uint8_t SoftSerial_read_nc(void)
 
 void SoftSerial_xmit(uint8_t c)
 {
-    // TIMERA0 disables the interrupt flag when it has sent
-    // the final stop bit. While a transmit is in progress the
+    // SoftSerial_TX_ISR disables the interrupt flag when it has sent
+    // the final data bit. While a transmit is in progress the
     // interrupt is enabled
+
+    register unsigned int next;
+    next = c | STOPBITS_1;      // set data and add 1 stop bit, use 0x0300 for 2 stop bits
+    next <<= 1;                 // add the start bit '0'
+
     while (TACCTL0 & CCIE) {
         ; // wait for previous xmit to finish
     }
 
-    // make the next output at least TICKS_PER_BIT in the future
-    // so we don't stomp on the the stop bit from our previous xmt
-
-    TACCR0 = TAR;               // resync with current TimerA clock
-    TACCR0 += TICKS_PER_BIT;    // setup the next timer tick
-    TACCTL0 = OUTMOD0 | CCIE;   // set TX_PIN HIGH and reenable interrupts
-
-    // now that we have set the next interrupt in motion
-    // we quickly need to set the TX data. Hopefully the
-    // next 2 lines happens before the next timer tick.
-
-    // Note: This code makes great use of multiple peripherals
-    //
-    // In the code above, we start with a busy wait on the CCIE
-    // interrupt flag. As soon as it is available, we setup the next
-    // send time and then enable the interrupt. Until that time happens,
-    // we have a few free cycles available to stuff the start and stop bits
-    // into the data buffer before the timer ISR kicks in and handles
-    // the event.  Note: if you are using a really slow clock or a really
-    // fast baud rate you could run into problems if the interrupt is
-    // triggered before you have finished with the USARTTXBUF
-
-    register unsigned temp = c | 0x100; // add stop bit '1'
-    temp <<= 1;                         // Add the start bit '0'
-    USARTTXBUF=temp;                    //
+    TACCR0 = TAR;               // resync with current TIMERA counter
+    TACCR0 += TICKS_PER_BIT;    // set next start bit edge time
+    TACCTL0 = OUTMOD0 | CCIE;   // set TX_PIN HIGH on EQU0 and re-enable interrupts
+    USARTTXBUF=next;            // set bits to sent
 }
 
 //--------------------------------------------------------------------------------
@@ -219,8 +210,9 @@ void SoftSerial_xmit(uint8_t c)
 //--------------------------------------------------------------------------------
 
 /**
- * store_rxchar() - add a character to the ring buffer
+ * store_rxchar() - append a character to the ring buffer
  *
+ * Note: if overflow occurs, the byte at head position is overwritten
  */
 
 #define store_rxchar(c) { \
@@ -237,7 +229,7 @@ void SoftSerial_xmit(uint8_t c)
  * SoftSerial_TX_ISR - TX Interrupt Handler
  *
  * Handle the sending of a data byte with one
- * start bit + 8 data bits + stop bit.
+ * start bit + 8 data bits + one stop bit.
  */
 
 #ifndef __GNUC__
@@ -255,7 +247,7 @@ void SoftSerial_TX_ISR(void)
        TACCTL0 &= ~OUTMOD2;         // set OUT (set to 1) OUTMOD0 (0b001)
     }
 
-    if (!(USARTTXBUF >>= 1)) {      // All bits transmitted ?
+    if (!(USARTTXBUF >>= 1)) {      // All data bits transmitted ?
         TACCTL0 &= ~CCIE;           // disable interrupt, indicates we are done
     }
 }
@@ -286,12 +278,13 @@ void SoftSerial_RX_ISR(void)
 {
     static uint8x2_t rx_bits;               // persistent storage for data and mask. fits in one 16 bit register
     volatile uint16_t resetTAIVIFG;         // just reading TAIV will reset the interrupt flag
-    resetTAIVIFG=TAIV;(void)resetTAIVIFG;
+    register uint16_t regCCTL1;             // using a temp register provides a slight performance improvement
 
-    register uint16_t regCCTL1=TA0CCTL1;    // using a register provides a slight performance improvement
+    resetTAIVIFG=TAIV; (void)resetTAIVIFG;  // read and reset, (void) to prevent unused compiler whining
 
     TA0CCR1 += TICKS_PER_BIT;               // Setup next time to sample
 
+    regCCTL1=TA0CCTL1;
     if (regCCTL1 & CAP) {                   // Are we in capture mode? If so, this is a start bit
         TA0CCR1 += TICKS_PER_BIT_DIV2;      // adjust sample time, so next sample is in the middle of the bit width
         rx_bits.mask_data = 0x0001;         // initialize both values, set data to 0x00 and mask to 0x01
@@ -307,4 +300,8 @@ void SoftSerial_RX_ISR(void)
             TA0CCTL1 = regCCTL1 | CAP;      // Switch back to capture mode and wait for next start bit (HI->LOW)
         }
     }
+
+    //P1OUT ^= BIT6; // You can uncomment this line to see where the routine is ending compared to the
+                     // incoming bits. If this routine takes too long and this toggle happens after
+                     // the next bit has started, then you need to lower the BAUD or increase F_CPU
 }
