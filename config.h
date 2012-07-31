@@ -53,13 +53,13 @@
 //-------------------------------------------------------------------------
 #define CALIBRATE_DCO       // on by default
 #define RX_BUFFER_SIZE 16   // Set the size of the ring buffer data needs to be a power of 2
-#define F_CPU 16000000    // fastest clock, factory calibrated sometimes
+//#define F_CPU 16000000    // fastest clock, factory calibrated sometimes
 //#define F_CPU 12000000    // a popular faster clock, factory calibrated sometimes
 //#define F_CPU 14745600    // I like this one
 //#define F_CPU 11059200    // UART friendly faster clock
 //#define F_CPU  8000000    // a popular medium clock, factory calibrated sometimes
 //#define F_CPU  7372800    // UART friendly and a little less power friendly
-//#define F_CPU  3686400    // can do 1200-9600 exactly and power friendly
+#define F_CPU  3686400    // can do 1200-9600 exactly and power friendly
 //#define F_CPU  1843200    // UART and power friendly
 //#define F_CPU  1000000    // slow, but factory calibrated on all chips
 

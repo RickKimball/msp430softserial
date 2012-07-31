@@ -149,32 +149,26 @@ void loop()
 
 // a couple of different methods of reading & writing below
 
-#if 0 // use SoftSerial_read() it checks available() before continuing
-    int c;
-    if ( !SoftSerial_empty() ) {
-        while((c=SoftSerial_read()) != -1) {
-            SoftSerial_xmit((uint8_t)c);
+    while (1) {
+
+#if 1 // use SoftSerial_read() it checks available() before continuing
+        int c;
+        if ( !SoftSerial_empty() ) {
+            while((c=SoftSerial_read()) != -1) {
+                SoftSerial_xmit((uint8_t)c);
+            }
         }
-    }
 #else // use SoftSerial_read_nc(), "no check read" it doesn't check
-      // available(). Only safe after calling available() to get count
-    while( 1 ) {
+        // available(). Only safe after calling available() to get count
         unsigned cnt = SoftSerial_available();
-        if ( cnt ) {
+        if (cnt) {
             do {
                 uint8_t c = SoftSerial_read_nc();
-                if ( c == 0x04 ) {  // check if user pressed CTRL-D, test end()
-                    print("\r\nshutting down...");
-                    SoftSerial_end();   // make sure last character is sent
-                    WDTCTL = ~WDTPW;    // force a reset by setting invalid watchdog password
-                }
-                else {
-                    SoftSerial_xmit(c);
-                }
-            } while( --cnt);
+                SoftSerial_xmit(c);
+            } while (--cnt);
         }
-    }
 #endif
+    }
 }
 
 /**

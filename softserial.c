@@ -100,7 +100,7 @@ void SoftSerial_init(void)
     TACCTL1 = SCS | CM1 | CAP | CCIE;   // Sync TACLK and MCLK, Detect Neg Edge, Enable Capture mode and RX Interrupt
     TACTL = TASSEL_2 | MC_2 | TACLR;    // Clock TIMERA from SMCLK, run in continuous mode counting from to 0-0xFFFF
 
-#if TICKS_PER_BIT < 208 /* 4800 @ 1MHz seems to work, RX_ISR routine requires at least 208 cycles */
+#if TICKS_PER_BIT < 378 /* 9600 @ 3.6864MHz seems to work, RX_ISR routine requires at least ~200+ cycles */
     #error BAUD_RATE is too fast for F_CPU! Try lowering the BAUD_RATE or increasing the F_CPU.
 #endif
 
@@ -191,10 +191,6 @@ void SoftSerial_xmit(uint8_t c)
     // the final data bit. While a transmit is in progress the
     // interrupt is enabled
 
-    register unsigned int next;
-    next = c | STOPBITS_1;      // set data and add 1 stop bit, use 0x0300 for 2 stop bits
-    next <<= 1;                 // add the start bit '0'
-
     while (TACCTL0 & CCIE) {
         ; // wait for previous xmit to finish
     }
@@ -202,6 +198,11 @@ void SoftSerial_xmit(uint8_t c)
     TACCR0 = TAR;               // resync with current TIMERA counter
     TACCR0 += TICKS_PER_BIT;    // set next start bit edge time
     TACCTL0 = OUTMOD0 | CCIE;   // set TX_PIN HIGH on EQU0 and re-enable interrupts
+
+    register unsigned int next;
+    next = c | STOPBITS_1;      // set data and add 1 stop bit, use 0x0300 for 2 stop bits
+    next <<= 1;                 // add the start bit '0'
+
     USARTTXBUF=next;            // set bits to sent
 }
 
@@ -278,13 +279,13 @@ void SoftSerial_RX_ISR(void)
 {
     static uint8x2_t rx_bits;               // persistent storage for data and mask. fits in one 16 bit register
     volatile uint16_t resetTAIVIFG;         // just reading TAIV will reset the interrupt flag
-    register uint16_t regCCTL1;             // using a temp register provides a slight performance improvement
-
     resetTAIVIFG=TAIV; (void)resetTAIVIFG;  // read and reset, (void) to prevent unused compiler whining
+
+    register uint16_t regCCTL1;             // using a temp register provides a slight performance improvement
+    regCCTL1=TA0CCTL1;
 
     TA0CCR1 += TICKS_PER_BIT;               // Setup next time to sample
 
-    regCCTL1=TA0CCTL1;
     if (regCCTL1 & CAP) {                   // Are we in capture mode? If so, this is a start bit
         TA0CCR1 += TICKS_PER_BIT_DIV2;      // adjust sample time, so next sample is in the middle of the bit width
         rx_bits.mask_data = 0x0001;         // initialize both values, set data to 0x00 and mask to 0x01
